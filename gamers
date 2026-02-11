@@ -1,0 +1,116 @@
+// src/controller.js
+
+import { Racer } from './racer.js';
+import { askForItemChoice } from './utils/input.js';
+
+export class Controller {
+  /**
+   * @param {string} name               Nome do jogador ou da AI
+   * @param {boolean} isHuman           true → recebe input do console
+   */
+  constructor(name, isHuman = false) {
+    this.name = name;
+    this.isHuman = isHuman;
+  }
+
+  async chooseItem(items, engine) {
+    if (!this.isHuman) {
+      // AI aleatória
+      const idx = Math.floor(Math.random() * items.length);
+      console.log(`[AI] ${this.name} usou ${items[idx].name}`);
+      return items[idx];
+    }
+
+    // Pergunta ao usuário
+    console.log(`\n🧩 Você tem itens: ${items.map(i => i.name).join(', ')}`);
+    const chosen = await askForItemChoice(items);
+    return chosen;
+  }
+
+  /** Retorna a velocidade atual do racer (pode ser modificada por AI) */
+  getSpeed(racer) {
+    return racer.speed;
+  }
+}
+// src/index.js
+import { Engine } from './engine.js';
+import { Racer } from './racer.js';
+import { Controller } from './controller.js';
+import { importChalk } from './utils/chalkWrapper.js';
+
+const chalk = await importChalk(); // só carrega quando disponível
+
+/** Utiliza argumentos da linha de comando */
+import { program } from 'commander';
+program
+  .option('-t, --track <name>', 'nome da pista', 'Mushroom Cup')
+  .option('-p, --players <n>', 'número de adversários AI', '2')
+  .parse(process.argv);
+const opts = program.opts();
+
+async function main() {
+  console.clear();
+  console.log(chalk.cyan.bold('\n=== Mario Kart Simulator – Terminal Edition ===\n'));
+
+  // ---------- 1️⃣ Cria os competidores ----------
+  const track = require('./track.js').getTrackByName(opts.track);
+  if (!track) {
+    console.error(`❗ Pista "${opts.track}" não encontrada!`);
+    process.exit(1);
+  }
+
+  // Jogador humano
+  const humanController = new Controller('Você', true);
+  const human = new Racer('Você', humanController);
+
+  // AI adversários
+  const ais = [];
+  for (let i = 0; i < Number(opts.players); i++) {
+    const name = `Computador-${i + 1}`;
+    const controller = new Controller(name, false); // AI aleatória
+    const racer = new Racer(name, controller, 4, 8);
+    ais.push(racer);
+  }
+
+  // ---------- 2️⃣ Monta a engine ----------
+  const engine = new Engine(opts.track, [human, ...ais]);
+
+  // ---------- 3️⃣ Inicia a corrida ----------
+  await engine.run();
+
+  // ---------- 4️⃣ Exibe ranking final ----------
+  console.log('\n📊 Classificação final:');
+  const ranked = engine.competitors
+    .slice()
+    .sort((a, b) => b.position - a.position);
+  ranked.forEach((r, idx) => {
+    const place = idx + 1;
+    const medal = place === 1 ? '🥇' : place === 2 ? '🥈' : place === 3 ? '🥉' : '';
+    console.log(`${medal} ${place}º: ${r.name} – ${r.position} pos.`);
+  });
+
+  await pressEnter('Obrigado por jogar! Pressione <Enter> para sair...');
+}
+
+main().catch(err => {
+  console.error('❌ Erro:', err.message);
+  process.exit(1);
+});
+// src/utils/chalkWrapper.js
+export async function importChalk() {
+  const chalk = await import('chalk');
+  return chalk;
+}
+// test/engine.test.js
+import { Engine } from '../src/engine.js';
+import { Racer } from '../src/racer.js';
+import { Controller } from '../src/controller.js';
+
+test('avançar corretamente quando não há hazards', async () => {
+  const dummyTrack = {
+    length: 100,
+    segments: [{ id: 1, length: 100, hazards: [] }],
+  };
+  // Simulação simples...
+});
+npm start -- --track "Mushroom Cup" --players 3
